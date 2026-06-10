@@ -1,1 +1,0 @@
--record(field_error, {field :: binary(), message :: binary()}).

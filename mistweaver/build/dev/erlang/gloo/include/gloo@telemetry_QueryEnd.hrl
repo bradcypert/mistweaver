@@ -1,1 +1,0 @@
--record(query_end, {sql :: binary(), duration_ms :: integer(), rows :: integer()}).

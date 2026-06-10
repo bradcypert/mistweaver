@@ -1,1 +1,0 @@
--record(user, {id :: integer(), email :: binary(), name :: binary()}).

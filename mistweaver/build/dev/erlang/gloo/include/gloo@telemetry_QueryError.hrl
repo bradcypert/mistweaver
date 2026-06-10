@@ -1,1 +1,0 @@
--record(query_error, {sql :: binary(), reason :: binary()}).

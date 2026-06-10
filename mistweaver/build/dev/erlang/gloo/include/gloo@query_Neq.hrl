@@ -1,1 +1,0 @@
--record(neq, {column :: binary(), value :: gloo@value:gloo_value()}).

@@ -1,1 +1,0 @@
--record(flash, {kind :: binary(), message :: binary()}).

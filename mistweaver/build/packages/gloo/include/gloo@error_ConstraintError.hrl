@@ -1,1 +1,0 @@
--record(constraint_error, {name :: binary()}).

@@ -1,1 +1,0 @@
--record(lte, {column :: binary(), value :: gloo@value:gloo_value()}).

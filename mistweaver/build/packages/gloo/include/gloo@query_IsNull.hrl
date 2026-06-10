@@ -1,1 +1,0 @@
--record(is_null, {column :: binary()}).

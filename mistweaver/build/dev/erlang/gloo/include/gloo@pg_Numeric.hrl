@@ -1,1 +1,0 @@
--record(numeric, {precision :: integer(), scale :: integer()}).

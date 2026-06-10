@@ -1,1 +1,0 @@
--record(eq, {column :: binary(), value :: gloo@value:gloo_value()}).

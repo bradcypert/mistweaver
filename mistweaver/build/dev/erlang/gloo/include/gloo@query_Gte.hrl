@@ -1,1 +1,0 @@
--record(gte, {column :: binary(), value :: gloo@value:gloo_value()}).
