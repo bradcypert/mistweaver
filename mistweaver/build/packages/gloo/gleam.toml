@@ -1,0 +1,19 @@
+name = "gloo"
+version = "1.0.2"
+description = "Small Postgres + SQLite library for Gleam. Query builder for 80% of CRUD, typed raw SQL for the rest."
+licences = ["Apache-2.0"]
+repository = { type = "github", user = "bradcypert", repo = "gloo" }
+links = [{ title = "Docs", href = "https://hexdocs.pm/gloo" }]
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+pog = ">= 4.1.0 and < 5.0.0"
+gleam_otp = ">= 1.2.0 and < 2.0.0"
+birl = ">= 2.0.0 and < 3.0.0"
+gleam_erlang = ">= 1.3.0 and < 2.0.0"
+gleam_time = ">= 1.8.0 and < 2.0.0"
+gleam_regexp = ">= 1.1.1 and < 2.0.0"
+sqlight = ">= 1.1.0 and < 2.0.0"
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"

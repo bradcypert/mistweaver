@@ -1,0 +1,1 @@
+-record(config, {port :: integer(), interface :: binary(), ipv6 :: boolean()}).

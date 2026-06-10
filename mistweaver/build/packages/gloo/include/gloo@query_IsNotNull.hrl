@@ -1,0 +1,1 @@
+-record(is_not_null, {column :: binary()}).

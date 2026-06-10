@@ -1,0 +1,1 @@
+-record(gt, {column :: binary(), value :: gloo@value:gloo_value()}).

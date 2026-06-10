@@ -1,0 +1,1 @@
+-record(too_many_results_error, {count :: integer()}).

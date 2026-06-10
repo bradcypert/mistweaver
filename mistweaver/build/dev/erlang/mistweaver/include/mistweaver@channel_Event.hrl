@@ -1,0 +1,1 @@
+-record(event, {event :: binary(), payload :: gleam@json:json()}).

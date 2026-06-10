@@ -1,0 +1,1 @@
+-record(query_start, {sql :: binary(), params_count :: integer()}).

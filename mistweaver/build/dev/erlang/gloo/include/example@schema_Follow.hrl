@@ -1,0 +1,1 @@
+-record(follow, {follower_id :: integer(), followee_id :: integer()}).

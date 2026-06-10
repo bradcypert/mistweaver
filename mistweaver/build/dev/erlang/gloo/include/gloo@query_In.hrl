@@ -1,0 +1,1 @@
+-record(in, {column :: binary(), values :: list(gloo@value:gloo_value())}).

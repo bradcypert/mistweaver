@@ -1,0 +1,10 @@
+{application, sqlight, [
+    {vsn, "1.1.0"},
+    {applications, [esqlite,
+                    gleam_stdlib]},
+    {description, "Use SQLite from Gleam!"},
+    {modules, [sqlight,
+               sqlight@@main,
+               sqlight_ffi]},
+    {registered, []}
+]}.

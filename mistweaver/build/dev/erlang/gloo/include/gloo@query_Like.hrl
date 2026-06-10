@@ -1,0 +1,1 @@
+-record(like, {column :: binary(), pattern :: binary()}).

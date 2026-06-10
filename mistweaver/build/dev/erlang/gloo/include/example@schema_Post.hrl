@@ -1,0 +1,1 @@
+-record(post, {id :: integer(), user_id :: integer(), body :: binary()}).

@@ -1,0 +1,1 @@
+-record(repo, {adapter :: gloo@adapter:adapter()}).
