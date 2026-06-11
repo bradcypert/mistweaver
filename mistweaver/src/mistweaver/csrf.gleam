@@ -53,13 +53,6 @@ pub fn validate(
 fn find_param(params: List(#(String, String)), key: String) -> Option(String) {
   params
   |> list.find(fn(p) { p.0 == key })
-  |> option_from_result
+  |> option.from_result
   |> option.map(fn(p) { p.1 })
-}
-
-fn option_from_result(r: Result(a, e)) -> Option(a) {
-  case r {
-    Ok(v) -> Some(v)
-    Error(_) -> None
-  }
 }

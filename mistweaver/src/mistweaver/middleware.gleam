@@ -83,7 +83,7 @@ pub fn cors(
   req: Request(body),
   next: fn(Request(body)) -> Response(ResponseData),
 ) -> Response(ResponseData) {
-  let origin = request.get_header(req, "origin") |> option_from_result
+  let origin = request.get_header(req, "origin") |> option.from_result
   let allow_origin = case options.allow_origins {
     ["*"] -> "*"
     origins ->
@@ -238,9 +238,3 @@ fn guess_content_type(path: String) -> String {
   }
 }
 
-fn option_from_result(r: Result(a, e)) -> option.Option(a) {
-  case r {
-    Ok(v) -> Some(v)
-    Error(_) -> None
-  }
-}

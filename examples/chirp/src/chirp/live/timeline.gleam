@@ -89,11 +89,15 @@ fn make_update(repo: Repo) -> fn(Model, Msg) -> #(Model, Effect(Msg)) {
     case msg {
       SetBody(body) -> #(Model(..model, new_body: body), effect.none())
 
-      SubmitChirp ->
-        case model.current_user_id, model.new_body {
-          Some(uid), body if body != "" -> #(model, post_chirp(repo, uid, body))
+      SubmitChirp -> {
+        let trimmed = string.trim(model.new_body)
+        let len = string.length(trimmed)
+        case model.current_user_id, trimmed {
+          Some(uid), body if body != "" && len <= 280 ->
+            #(model, post_chirp(repo, uid, body))
           _, _ -> #(model, effect.none())
         }
+      }
 
       ChirpPosted(chirp) -> {
         let author = model.current_username |> option.unwrap("unknown")

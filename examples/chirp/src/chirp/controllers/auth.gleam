@@ -145,7 +145,7 @@ fn handle_register(
             }
             Error(_) ->
               mw_response.redirect(302, to: "/register")
-              |> flash.put(secret, "error", "That email is already registered.")
+              |> flash.put(secret, "error", "That username or email is already taken.")
           }
       }
     }

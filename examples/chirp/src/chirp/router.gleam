@@ -45,14 +45,18 @@ pub fn build(repo: Repo, secret: String) -> router.Router(Connection) {
         timeline.make(repo, user_id, username)
       },
       fn(req, component) {
-        let #(flash_opt, _clear) = flash.consume(req, secret)
-        layout.page(
-          req,
-          secret,
-          "Timeline",
-          flash_opt,
-          html.div([class("timeline-page")], [component]),
+        let #(flash_opt, clear_flash) = flash.consume(req, secret)
+        mw_response.html(
+          200,
+          element.to_document_string(layout.page(
+            req,
+            secret,
+            "Timeline",
+            flash_opt,
+            html.div([class("timeline-page")], [component]),
+          )),
         )
+        |> clear_flash
       },
     ),
   )

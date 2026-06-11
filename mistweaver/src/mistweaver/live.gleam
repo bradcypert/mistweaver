@@ -73,19 +73,17 @@ pub fn handler(
 
 /// Like `handler/1` but lets the caller supply the full HTML shell.
 /// The `shell` function receives the request and the pre-built
-/// `<lustre-server-component>` element; it must include
-/// `server_component.script()` somewhere in `<head>`.
-///
-/// This lets you wrap the live component in a page layout with navigation,
-/// forms, or other static content — including session-aware content since the
-/// request (and its cookies) is available.
+/// `<lustre-server-component>` element and must return a full `Response`.
+/// This gives the shell access to set cookies, clear flash, etc.
 ///
 ///   router.get("/timeline", live.handler_with_shell(timeline_live, fn(req, component) {
-///     layout(req, component)
+///     let #(flash_opt, clear_flash) = flash.consume(req, secret)
+///     mw_response.html(200, element.to_document_string(layout(req, flash_opt, component)))
+///     |> clear_flash
 ///   }))
 pub fn handler_with_shell(
   lv: LiveView(model, msg),
-  shell: fn(Request(Connection), Element(Nil)) -> Element(Nil),
+  shell: fn(Request(Connection), Element(Nil)) -> Response(ResponseData),
 ) -> fn(Request(Connection), List(#(String, String))) -> Response(ResponseData) {
   fn(req, params) {
     case request.get_header(req, "upgrade") {
@@ -97,7 +95,7 @@ pub fn handler_with_shell(
 
 fn serve_custom_shell(
   req: Request(Connection),
-  shell: fn(Request(Connection), Element(Nil)) -> Element(Nil),
+  shell: fn(Request(Connection), Element(Nil)) -> Response(ResponseData),
 ) -> Response(ResponseData) {
   let component =
     server_component.element(
@@ -110,7 +108,7 @@ fn serve_custom_shell(
       ],
       [],
     )
-  mw_response.html(200, element.to_document_string(shell(req, component)))
+  shell(req, component)
 }
 
 /// Like `handler/1` but the LiveView is created fresh per request by calling
@@ -140,12 +138,13 @@ pub fn dynamic_handler(
 
 /// `dynamic_handler` with a custom HTML shell. Both the LiveView factory and
 /// the shell receive the full request, so both can read the session.
+/// The shell must return a full `Response` so it can set cookies, clear flash, etc.
 pub fn dynamic_handler_with_shell(
   make_lv: fn(Request(Connection), List(#(String, String))) -> LiveView(
     model,
     msg,
   ),
-  shell: fn(Request(Connection), Element(Nil)) -> Element(Nil),
+  shell: fn(Request(Connection), Element(Nil)) -> Response(ResponseData),
 ) -> fn(Request(Connection), List(#(String, String))) -> Response(ResponseData) {
   fn(req, params) {
     case request.get_header(req, "upgrade") {
