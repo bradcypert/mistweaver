@@ -8,6 +8,7 @@ import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
+import mistweaver/conn.{type AuthUser}
 import mistweaver/live.{type LiveView}
 import chirp/queries
 import chirp/schema.{type ChirpWithAuthor}
@@ -38,19 +39,15 @@ pub type Msg {
 }
 
 // ---------------------------------------------------------------------------
-// LiveView factory — context is injected directly, no URL param tricks
+// LiveView factory
 // ---------------------------------------------------------------------------
 
-/// Build a timeline LiveView that closes over the repo and the current user.
-/// Called per-request from `live.dynamic_handler_with_shell` so the user
-/// context comes from the real session cookie, not from URL params.
 pub fn make(
   repo: Repo,
-  user_id: option.Option(Int),
-  username: option.Option(String),
+  auth: option.Option(AuthUser),
 ) -> LiveView(Model, Msg) {
   live.LiveView(
-    init: fn(_params) { init(repo, user_id, username) },
+    init: fn(_params) { init(repo, auth) },
     update: make_update(repo),
     view: view,
   )
@@ -62,8 +59,7 @@ pub fn make(
 
 fn init(
   repo: Repo,
-  user_id: option.Option(Int),
-  username: option.Option(String),
+  auth: option.Option(AuthUser),
 ) -> #(Model, Effect(Msg)) {
   let chirps = case queries.recent_chirps(repo, 50) {
     Ok(cs) -> cs
@@ -73,8 +69,8 @@ fn init(
     Model(
       chirps: chirps,
       new_body: "",
-      current_user_id: user_id,
-      current_username: username,
+      current_user_id: option.map(auth, fn(u) { u.id }),
+      current_username: option.map(auth, fn(u) { u.username }),
     ),
     effect.none(),
   )

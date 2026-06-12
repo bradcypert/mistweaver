@@ -12,6 +12,7 @@ import lustre/element.{type Element}
 import lustre/element/html
 import lustre/server_component
 import mist.{type Connection, type ResponseData}
+import mistweaver/conn.{type Conn}
 import mistweaver/response as mw_response
 
 // ---------------------------------------------------------------------------
@@ -62,11 +63,11 @@ pub type LiveView(model, msg) {
 ///   |> router.get("/counter/*", live.handler(counter_live))
 pub fn handler(
   lv: LiveView(model, msg),
-) -> fn(Request(Connection), List(#(String, String))) -> Response(ResponseData) {
-  fn(req, params) {
-    case request.get_header(req, "upgrade") {
-      Ok("websocket") -> ws_upgrade(lv, req, params)
-      _ -> serve_shell(req)
+) -> fn(Conn(Connection), List(#(String, String))) -> Response(ResponseData) {
+  fn(c: Conn(Connection), params) {
+    case request.get_header(c.request, "upgrade") {
+      Ok("websocket") -> ws_upgrade(lv, c.request, params)
+      _ -> serve_shell(c.request)
     }
   }
 }
@@ -83,24 +84,24 @@ pub fn handler(
 ///   }))
 pub fn handler_with_shell(
   lv: LiveView(model, msg),
-  shell: fn(Request(Connection), Element(Nil)) -> Response(ResponseData),
-) -> fn(Request(Connection), List(#(String, String))) -> Response(ResponseData) {
-  fn(req, params) {
-    case request.get_header(req, "upgrade") {
-      Ok("websocket") -> ws_upgrade(lv, req, params)
-      _ -> serve_custom_shell(req, shell)
+  shell: fn(Conn(Connection), Element(Nil)) -> Response(ResponseData),
+) -> fn(Conn(Connection), List(#(String, String))) -> Response(ResponseData) {
+  fn(c: Conn(Connection), params) {
+    case request.get_header(c.request, "upgrade") {
+      Ok("websocket") -> ws_upgrade(lv, c.request, params)
+      _ -> serve_custom_shell(c, shell)
     }
   }
 }
 
 fn serve_custom_shell(
-  req: Request(Connection),
-  shell: fn(Request(Connection), Element(Nil)) -> Response(ResponseData),
+  c: Conn(Connection),
+  shell: fn(Conn(Connection), Element(Nil)) -> Response(ResponseData),
 ) -> Response(ResponseData) {
   let component =
     server_component.element(
       [
-        server_component.route(req.path <> case req.query {
+        server_component.route(c.request.path <> case c.request.query {
           Some(q) -> "?" <> q
           None -> ""
         }),
@@ -108,7 +109,7 @@ fn serve_custom_shell(
       ],
       [],
     )
-  shell(req, component)
+  shell(c, component)
 }
 
 /// Like `handler/1` but the LiveView is created fresh per request by calling
@@ -123,15 +124,15 @@ fn serve_custom_shell(
 ///     timeline.make(repo, uid)
 ///   }))
 pub fn dynamic_handler(
-  make_lv: fn(Request(Connection), List(#(String, String))) -> LiveView(
+  make_lv: fn(Conn(Connection), List(#(String, String))) -> LiveView(
     model,
     msg,
   ),
-) -> fn(Request(Connection), List(#(String, String))) -> Response(ResponseData) {
-  fn(req, params) {
-    case request.get_header(req, "upgrade") {
-      Ok("websocket") -> ws_upgrade(make_lv(req, params), req, params)
-      _ -> serve_shell(req)
+) -> fn(Conn(Connection), List(#(String, String))) -> Response(ResponseData) {
+  fn(c: Conn(Connection), params) {
+    case request.get_header(c.request, "upgrade") {
+      Ok("websocket") -> ws_upgrade(make_lv(c, params), c.request, params)
+      _ -> serve_shell(c.request)
     }
   }
 }
@@ -140,16 +141,16 @@ pub fn dynamic_handler(
 /// the shell receive the full request, so both can read the session.
 /// The shell must return a full `Response` so it can set cookies, clear flash, etc.
 pub fn dynamic_handler_with_shell(
-  make_lv: fn(Request(Connection), List(#(String, String))) -> LiveView(
+  make_lv: fn(Conn(Connection), List(#(String, String))) -> LiveView(
     model,
     msg,
   ),
-  shell: fn(Request(Connection), Element(Nil)) -> Response(ResponseData),
-) -> fn(Request(Connection), List(#(String, String))) -> Response(ResponseData) {
-  fn(req, params) {
-    case request.get_header(req, "upgrade") {
-      Ok("websocket") -> ws_upgrade(make_lv(req, params), req, params)
-      _ -> serve_custom_shell(req, shell)
+  shell: fn(Conn(Connection), Element(Nil)) -> Response(ResponseData),
+) -> fn(Conn(Connection), List(#(String, String))) -> Response(ResponseData) {
+  fn(c: Conn(Connection), params) {
+    case request.get_header(c.request, "upgrade") {
+      Ok("websocket") -> ws_upgrade(make_lv(c, params), c.request, params)
+      _ -> serve_custom_shell(c, shell)
     }
   }
 }

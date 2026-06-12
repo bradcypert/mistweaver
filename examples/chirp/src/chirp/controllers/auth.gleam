@@ -1,5 +1,4 @@
 import gleam/http.{Get, Post}
-import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
 import gleam/int
 import gleam/list
@@ -10,12 +9,14 @@ import lustre/attribute.{action, class, for, href, method, name, required, type_
 import lustre/element
 import lustre/element/html
 import mist.{type Connection, type ResponseData}
+import mistweaver/conn.{type Conn}
 import mistweaver/csrf
 import mistweaver/flash
 import mistweaver/middleware
 import mistweaver/password
 import mistweaver/request as mw_request
 import mistweaver/response as mw_response
+import mistweaver/router.{type Params}
 import mistweaver/session
 import chirp/layout
 import chirp/queries
@@ -27,26 +28,23 @@ import chirp/queries
 pub fn register(
   repo: Repo,
   secret: String,
-) -> fn(Request(Connection), List(#(String, String))) -> Response(ResponseData) {
-  fn(req: Request(Connection), _params) {
-    case req.method {
-      Get -> register_page(req, secret)
+) -> fn(Conn(Connection), Params) -> Response(ResponseData) {
+  fn(c: Conn(Connection), _params) {
+    case c.request.method {
+      Get -> register_page(c, secret)
       Post ->
-        middleware.body_limit(4096, fn(req2) {
-          handle_register(repo, req2, secret)
-        })(req, fn(_) { mw_response.not_found() })
+        middleware.body_limit(4096, fn(c2) {
+          handle_register(repo, c2, secret)
+        })(c, fn(_) { mw_response.not_found() })
       _ -> mw_response.not_found()
     }
   }
 }
 
-fn register_page(
-  req: Request(Connection),
-  secret: String,
-) -> Response(ResponseData) {
-  let sess = session.get(req, secret)
+fn register_page(c: Conn(Connection), secret: String) -> Response(ResponseData) {
+  let sess = session.get(c.request, secret)
   let #(csrf_token, updated_sess) = csrf.token_for(sess)
-  let #(flash_opt, clear_flash) = flash.consume(req, secret)
+  let #(flash_opt, clear_flash) = flash.consume(c.request, secret)
 
   let content =
     html.div([class("auth-card")], [
@@ -88,9 +86,7 @@ fn register_page(
 
   mw_response.html(
     200,
-    element.to_document_string(
-      layout.page(req, secret, "Register", flash_opt, content),
-    ),
+    element.to_document_string(layout.page(c, "Register", flash_opt, content)),
   )
   |> session.put(updated_sess, secret)
   |> clear_flash
@@ -98,11 +94,11 @@ fn register_page(
 
 fn handle_register(
   repo: Repo,
-  req: Request(BitArray),
+  c: Conn(BitArray),
   secret: String,
 ) -> Response(ResponseData) {
-  let sess = session.get(req, secret)
-  let params = mw_request.form_params(req)
+  let sess = session.get(c.request, secret)
+  let params = mw_request.form_params(c.request)
 
   case csrf.validate(params, sess) {
     False ->
@@ -145,7 +141,11 @@ fn handle_register(
             }
             Error(_) ->
               mw_response.redirect(302, to: "/register")
-              |> flash.put(secret, "error", "That username or email is already taken.")
+              |> flash.put(
+                secret,
+                "error",
+                "That username or email is already taken.",
+              )
           }
       }
     }
@@ -159,26 +159,23 @@ fn handle_register(
 pub fn login(
   repo: Repo,
   secret: String,
-) -> fn(Request(Connection), List(#(String, String))) -> Response(ResponseData) {
-  fn(req: Request(Connection), _params) {
-    case req.method {
-      Get -> login_page(req, secret)
+) -> fn(Conn(Connection), Params) -> Response(ResponseData) {
+  fn(c: Conn(Connection), _params) {
+    case c.request.method {
+      Get -> login_page(c, secret)
       Post ->
-        middleware.body_limit(4096, fn(req2) {
-          handle_login(repo, req2, secret)
-        })(req, fn(_) { mw_response.not_found() })
+        middleware.body_limit(4096, fn(c2) {
+          handle_login(repo, c2, secret)
+        })(c, fn(_) { mw_response.not_found() })
       _ -> mw_response.not_found()
     }
   }
 }
 
-fn login_page(
-  req: Request(Connection),
-  secret: String,
-) -> Response(ResponseData) {
-  let sess = session.get(req, secret)
+fn login_page(c: Conn(Connection), secret: String) -> Response(ResponseData) {
+  let sess = session.get(c.request, secret)
   let #(csrf_token, updated_sess) = csrf.token_for(sess)
-  let #(flash_opt, clear_flash) = flash.consume(req, secret)
+  let #(flash_opt, clear_flash) = flash.consume(c.request, secret)
 
   let content =
     html.div([class("auth-card")], [
@@ -205,9 +202,7 @@ fn login_page(
 
   mw_response.html(
     200,
-    element.to_document_string(
-      layout.page(req, secret, "Sign in", flash_opt, content),
-    ),
+    element.to_document_string(layout.page(c, "Sign in", flash_opt, content)),
   )
   |> session.put(updated_sess, secret)
   |> clear_flash
@@ -215,11 +210,11 @@ fn login_page(
 
 fn handle_login(
   repo: Repo,
-  req: Request(BitArray),
+  c: Conn(BitArray),
   secret: String,
 ) -> Response(ResponseData) {
-  let sess = session.get(req, secret)
-  let params = mw_request.form_params(req)
+  let sess = session.get(c.request, secret)
+  let params = mw_request.form_params(c.request)
 
   case csrf.validate(params, sess) {
     False ->
@@ -257,10 +252,9 @@ fn handle_login(
 // ---------------------------------------------------------------------------
 
 pub fn logout(
-  _repo: Repo,
   secret: String,
-) -> fn(Request(Connection), List(#(String, String))) -> Response(ResponseData) {
-  fn(_req: Request(Connection), _params) {
+) -> fn(Conn(Connection), Params) -> Response(ResponseData) {
+  fn(_c: Conn(Connection), _params) {
     mw_response.redirect(302, to: "/login")
     |> session.delete
     |> flash.put(secret, "success", "You've been signed out.")

@@ -1,23 +1,20 @@
-import gleam/http/request.{type Request}
 import gleam/option.{None, Some}
 import lustre/attribute.{attribute, class, href, type_}
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/server_component
 import mist.{type Connection}
+import mistweaver/conn.{type Conn}
 import mistweaver/flash.{type Flash}
-import mistweaver/session
 
-/// Full page shell. `flash_opt` is rendered as a banner above main content.
+/// Full page shell. Reads auth from conn so no session re-parse is needed.
 pub fn page(
-  req: Request(Connection),
-  secret: String,
+  conn: Conn(Connection),
   title: String,
   flash_opt: option.Option(Flash),
   content: Element(Nil),
 ) -> Element(Nil) {
-  let sess = session.get(req, secret)
-  let logged_in_as = session.fetch(sess, "username")
+  let logged_in_as = conn.auth |> option.map(fn(u) { u.username })
 
   html.html([attribute("lang", "en")], [
     html.head([], [

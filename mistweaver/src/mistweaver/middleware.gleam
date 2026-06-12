@@ -3,7 +3,7 @@ import gleam/bit_array
 import gleam/bytes_tree
 import gleam/crypto
 import gleam/http
-import gleam/http/request.{type Request}
+import gleam/http/request
 import gleam/http/response.{type Response}
 import gleam/int
 import gleam/list
@@ -11,6 +11,7 @@ import gleam/option.{None, Some}
 import gleam/string
 import logging
 import mist.{type Connection, type ResponseData}
+import mistweaver/conn.{type Conn, Conn}
 import mistweaver/router.{type Middleware}
 
 // ---------------------------------------------------------------------------
@@ -20,17 +21,17 @@ import mistweaver/router.{type Middleware}
 /// Log each request with method, path, status, and elapsed time.
 /// Intended for the outermost layer of the middleware stack.
 pub fn log(
-  req: Request(body),
-  next: fn(Request(body)) -> Response(ResponseData),
+  c: Conn(body),
+  next: fn(Conn(body)) -> Response(ResponseData),
 ) -> Response(ResponseData) {
   let start = birl.monotonic_now()
-  let resp = next(req)
+  let resp = next(c)
   let elapsed_ms = { birl.monotonic_now() - start } / 1000
   logging.log(
     logging.Info,
-    method_string(req.method)
+    method_string(c.request.method)
       <> " "
-      <> req.path
+      <> c.request.path
       <> " → "
       <> int.to_string(resp.status)
       <> " ("
@@ -44,15 +45,15 @@ pub fn log(
 /// passed downstream and the response returned upstream. Downstream handlers
 /// can read the ID via `request.get_header(req, "x-request-id")`.
 pub fn request_id(
-  req: Request(body),
-  next: fn(Request(body)) -> Response(ResponseData),
+  c: Conn(body),
+  next: fn(Conn(body)) -> Response(ResponseData),
 ) -> Response(ResponseData) {
-  let id = case request.get_header(req, "x-request-id") {
+  let id = case request.get_header(c.request, "x-request-id") {
     Ok(existing) -> existing
     Error(_) -> generate_id()
   }
-  let req2 = request.set_header(req, "x-request-id", id)
-  next(req2)
+  let req2 = request.set_header(c.request, "x-request-id", id)
+  next(Conn(..c, request: req2))
   |> response.set_header("x-request-id", id)
 }
 
@@ -80,10 +81,10 @@ pub fn cors_allow_all() -> CorsOptions {
 /// preflight requests by returning 204 without calling `next`.
 pub fn cors(
   options: CorsOptions,
-  req: Request(body),
-  next: fn(Request(body)) -> Response(ResponseData),
+  c: Conn(body),
+  next: fn(Conn(body)) -> Response(ResponseData),
 ) -> Response(ResponseData) {
-  let origin = request.get_header(req, "origin") |> option.from_result
+  let origin = request.get_header(c.request, "origin") |> option.from_result
   let allow_origin = case options.allow_origins {
     ["*"] -> "*"
     origins ->
@@ -121,14 +122,14 @@ pub fn cors(
     }
   }
 
-  case req.method {
+  case c.request.method {
     http.Options ->
       response.new(204)
       |> response.set_body(mist.Bytes(bytes_tree.new()))
       |> add_cors
 
     _ ->
-      next(req)
+      next(c)
       |> add_cors
   }
 }
@@ -146,11 +147,11 @@ pub fn static_files(
   under prefix: String,
   from dir: String,
 ) -> Middleware(Connection) {
-  fn(req: Request(Connection), next: fn(Request(Connection)) -> Response(ResponseData)) {
-    case string.starts_with(req.path, prefix) {
-      False -> next(req)
+  fn(c: Conn(Connection), next: fn(Conn(Connection)) -> Response(ResponseData)) {
+    case string.starts_with(c.request.path, prefix) {
+      False -> next(c)
       True -> {
-        let rel = string.drop_start(req.path, string.length(prefix))
+        let rel = string.drop_start(c.request.path, string.length(prefix))
         let file_path = case string.starts_with(rel, "/") {
           True -> dir <> rel
           False -> dir <> "/" <> rel
@@ -160,7 +161,7 @@ pub fn static_files(
             response.new(200)
             |> response.set_header("content-type", guess_content_type(file_path))
             |> response.set_body(body)
-          Error(_) -> next(req)
+          Error(_) -> next(c)
         }
       }
     }
@@ -176,11 +177,11 @@ pub fn static_files(
 /// The handler it wraps must accept `Request(BitArray)`.
 pub fn body_limit(
   max_bytes: Int,
-  handler: fn(Request(BitArray)) -> Response(ResponseData),
+  handler: fn(Conn(BitArray)) -> Response(ResponseData),
 ) -> Middleware(Connection) {
-  fn(req: Request(Connection), _next: fn(Request(Connection)) -> Response(ResponseData)) {
-    case mist.read_body(req, max_bytes) {
-      Ok(req_with_body) -> handler(req_with_body)
+  fn(c: Conn(Connection), _next: fn(Conn(Connection)) -> Response(ResponseData)) {
+    case mist.read_body(c.request, max_bytes) {
+      Ok(req_with_body) -> handler(Conn(..c, request: req_with_body))
       Error(mist.ExcessBody) ->
         response.new(413)
         |> response.set_body(mist.Bytes(bytes_tree.new()))

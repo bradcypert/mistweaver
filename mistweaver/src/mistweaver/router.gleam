@@ -5,25 +5,21 @@ import gleam/http/response.{type Response}
 import gleam/list
 import gleam/string
 import mist.{type Connection, type ResponseData}
+import mistweaver/conn.{type Conn}
 
 /// Path parameters extracted from a matched route, e.g. [#("id", "42")].
 pub type Params =
   List(#(String, String))
 
-/// A handler receives the (possibly middleware-transformed) request and the
-/// path params captured during route matching.
-///
-/// In production this is `Handler(Connection)`; in tests use any body type.
+/// A handler receives the enriched connection (with auth, assigns, and the
+/// raw request) plus the path params captured during route matching.
 pub type Handler(body) =
-  fn(Request(body), Params) -> Response(ResponseData)
+  fn(Conn(body), Params) -> Response(ResponseData)
 
-/// Middleware wraps a handler: it receives the request and a `next` function
-/// to call (with a possibly-modified request) to continue the chain.
-/// Compose with Gleam's `use` syntax:
-///
-///   use req <- middleware.log(req)
+/// Middleware wraps a handler: it receives the connection and a `next` function
+/// to call (with a possibly-modified connection) to continue the chain.
 pub type Middleware(body) =
-  fn(Request(body), fn(Request(body)) -> Response(ResponseData)) ->
+  fn(Conn(body), fn(Conn(body)) -> Response(ResponseData)) ->
     Response(ResponseData)
 
 pub opaque type PathSegment {
@@ -145,11 +141,12 @@ pub fn dispatch(
   router: Router(body),
   req: Request(body),
 ) -> Response(ResponseData) {
+  let c = conn.new(req)
   let path_segments = parse_request_path(req)
   case match_route(router.routes, req.method, path_segments) {
     Ok(#(route, params)) ->
-      apply_middlewares(route.middlewares, req, fn(req2) {
-        route.handler(req2, params)
+      apply_middlewares(route.middlewares, c, fn(c2) {
+        route.handler(c2, params)
       })
     Error(Nil) -> not_found()
   }
@@ -242,13 +239,13 @@ fn match_segments(
 
 fn apply_middlewares(
   middlewares: List(Middleware(body)),
-  req: Request(body),
-  final: fn(Request(body)) -> Response(ResponseData),
+  c: Conn(body),
+  final: fn(Conn(body)) -> Response(ResponseData),
 ) -> Response(ResponseData) {
   case middlewares {
-    [] -> final(req)
+    [] -> final(c)
     [middleware, ..rest] ->
-      middleware(req, fn(req2) { apply_middlewares(rest, req2, final) })
+      middleware(c, fn(c2) { apply_middlewares(rest, c2, final) })
   }
 }
 
