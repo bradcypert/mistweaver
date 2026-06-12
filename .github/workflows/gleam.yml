@@ -1,0 +1,30 @@
+name: Gleam
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          gleam-version: "1"
+
+      - name: Build mistweaver
+        working-directory: mistweaver
+        run: gleam build
+
+      - name: Test mistweaver
+        working-directory: mistweaver
+        run: gleam test
+
+      - name: Build chirp example
+        working-directory: examples/chirp
+        run: gleam build

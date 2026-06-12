@@ -11,7 +11,7 @@ hero:
       link: /guide/introduction
     - theme: alt
       text: View on GitHub
-      link: https://github.com/bcypert/mistweaver
+      link: https://github.com/bradcypert/mistweaver
 
 features:
   - title: Familiar patterns

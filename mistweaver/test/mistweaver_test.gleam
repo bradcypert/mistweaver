@@ -8,11 +8,16 @@ import gleam/option.{None, Some}
 import gleeunit
 import mist
 import mistweaver/channel
+import mistweaver/changeset
+import mistweaver/config
 import mistweaver/conn.{type Conn, Conn}
 import mistweaver/middleware
+import mistweaver/multipart
 import mistweaver/request as mw_request
+import mistweaver/rescue
 import mistweaver/response as mw_response
 import mistweaver/router
+import mistweaver/test_conn
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -306,7 +311,6 @@ pub fn cors_restricts_origin_test() {
 
   let resp =
     middleware.cors(opts, c, fn(_c) { mw_response.ok() })
-  // Origin not in allowed list → empty allow-origin header
   assert response.get_header(resp, "access-control-allow-origin") == Ok("")
 }
 
@@ -346,7 +350,6 @@ pub fn multiple_middleware_run_in_order_test() {
     })
 
   let resp = router.dispatch(r, make_request(http.Get, "/trace"))
-  // Verify both middleware ran — neither short-circuited the chain
   assert resp.status == 200
 }
 
@@ -429,6 +432,289 @@ pub fn channel_socket_router_builds_without_panic_test() {
     |> channel.route("room:*", ch)
 
   let _h = channel.handler(socket_router)
+}
+
+// ---------------------------------------------------------------------------
+// Changeset
+// ---------------------------------------------------------------------------
+
+pub fn changeset_valid_when_all_required_present_test() {
+  let cs =
+    [#("name", "Alice"), #("email", "alice@example.com")]
+    |> changeset.cast(required: ["name", "email"])
+  assert changeset.valid(cs) == True
+}
+
+pub fn changeset_invalid_when_required_missing_test() {
+  let cs =
+    [#("name", "Alice")]
+    |> changeset.cast(required: ["name", "email"])
+  assert changeset.valid(cs) == False
+  assert changeset.errors_for(cs, "email") == ["is required"]
+}
+
+pub fn changeset_invalid_when_required_blank_test() {
+  let cs =
+    [#("name", "  ")]
+    |> changeset.cast(required: ["name"])
+  assert changeset.valid(cs) == False
+  assert changeset.errors_for(cs, "name") == ["is required"]
+}
+
+pub fn changeset_get_returns_value_test() {
+  let cs =
+    [#("role", "admin")]
+    |> changeset.cast(required: [])
+  assert changeset.get(cs, "role") == Some("admin")
+  assert changeset.get(cs, "missing") == None
+}
+
+pub fn changeset_get_or_returns_default_test() {
+  let cs = [] |> changeset.cast(required: [])
+  assert changeset.get_or(cs, "lang", "en") == "en"
+}
+
+pub fn changeset_validate_length_min_test() {
+  let cs =
+    [#("password", "abc")]
+    |> changeset.cast(required: ["password"])
+    |> changeset.validate_length("password", min: Some(8), max: None)
+  assert changeset.valid(cs) == False
+  assert list.length(changeset.errors_for(cs, "password")) == 1
+}
+
+pub fn changeset_validate_length_max_test() {
+  let cs =
+    [#("bio", "way too long string that exceeds ten characters")]
+    |> changeset.cast(required: ["bio"])
+    |> changeset.validate_length("bio", min: None, max: Some(10))
+  assert changeset.valid(cs) == False
+}
+
+pub fn changeset_validate_length_passes_within_bounds_test() {
+  let cs =
+    [#("username", "alice")]
+    |> changeset.cast(required: ["username"])
+    |> changeset.validate_length("username", min: Some(3), max: Some(20))
+  assert changeset.valid(cs) == True
+}
+
+pub fn changeset_validate_format_fails_test() {
+  let cs =
+    [#("email", "not-an-email")]
+    |> changeset.cast(required: ["email"])
+    |> changeset.validate_format(
+      "email",
+      with: fn(v) { v |> fn(s) { s == "x" || s != "x" && s != "not-an-email" } },
+      message: "is invalid",
+    )
+  assert list.length(changeset.errors_for(cs, "email")) == 1
+}
+
+pub fn changeset_validate_inclusion_fails_test() {
+  let cs =
+    [#("role", "superadmin")]
+    |> changeset.cast(required: ["role"])
+    |> changeset.validate_inclusion("role", in: ["admin", "user"])
+  assert changeset.valid(cs) == False
+  assert changeset.errors_for(cs, "role") == ["is not a valid value"]
+}
+
+pub fn changeset_validate_inclusion_passes_test() {
+  let cs =
+    [#("role", "admin")]
+    |> changeset.cast(required: ["role"])
+    |> changeset.validate_inclusion("role", in: ["admin", "user"])
+  assert changeset.valid(cs) == True
+}
+
+pub fn changeset_multiple_errors_accumulate_test() {
+  let cs =
+    [#("password", "ab")]
+    |> changeset.cast(required: ["password", "email"])
+    |> changeset.validate_length("password", min: Some(8), max: None)
+  assert changeset.valid(cs) == False
+  assert list.length(changeset.errors_for(cs, "email")) == 1
+  assert list.length(changeset.errors_for(cs, "password")) == 1
+}
+
+// ---------------------------------------------------------------------------
+// Multipart
+// ---------------------------------------------------------------------------
+
+pub fn multipart_parses_form_field_test() {
+  let boundary = "testboundary"
+  let body =
+    "--testboundary\r\nContent-Disposition: form-data; name=\"username\"\r\n\r\nalice\r\n--testboundary--"
+  let req =
+    request.Request(
+      method: http.Post,
+      headers: [
+        #(
+          "content-type",
+          "multipart/form-data; boundary=" <> boundary,
+        ),
+      ],
+      body: <<body:utf8>>,
+      scheme: http.Http,
+      host: "localhost",
+      port: None,
+      path: "/upload",
+      query: None,
+    )
+
+  let assert Ok(parts) = multipart.parse(req)
+  assert multipart.get_field(parts, "username") == Some("alice")
+}
+
+pub fn multipart_parses_multiple_fields_test() {
+  let body =
+    "--b\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\n1\r\n--b\r\nContent-Disposition: form-data; name=\"b\"\r\n\r\n2\r\n--b--"
+  let req =
+    request.Request(
+      method: http.Post,
+      headers: [#("content-type", "multipart/form-data; boundary=b")],
+      body: <<body:utf8>>,
+      scheme: http.Http,
+      host: "localhost",
+      port: None,
+      path: "/",
+      query: None,
+    )
+
+  let assert Ok(parts) = multipart.parse(req)
+  assert multipart.get_field(parts, "a") == Some("1")
+  assert multipart.get_field(parts, "b") == Some("2")
+}
+
+pub fn multipart_missing_content_type_returns_error_test() {
+  let req =
+    request.Request(
+      method: http.Post,
+      headers: [],
+      body: <<"body":utf8>>,
+      scheme: http.Http,
+      host: "localhost",
+      port: None,
+      path: "/",
+      query: None,
+    )
+  assert multipart.parse(req) == Error("missing Content-Type header")
+}
+
+pub fn multipart_wrong_content_type_returns_error_test() {
+  let req =
+    request.Request(
+      method: http.Post,
+      headers: [#("content-type", "application/json")],
+      body: <<"{}":utf8>>,
+      scheme: http.Http,
+      host: "localhost",
+      port: None,
+      path: "/",
+      query: None,
+    )
+  assert multipart.parse(req) == Error("Content-Type is not multipart/form-data")
+}
+
+pub fn multipart_get_field_missing_returns_none_test() {
+  let assert Ok(parts) = multipart.parse(
+    request.Request(
+      method: http.Post,
+      headers: [#("content-type", "multipart/form-data; boundary=b")],
+      body: <<"--b\r\nContent-Disposition: form-data; name=\"x\"\r\n\r\nhello\r\n--b--":utf8>>,
+      scheme: http.Http,
+      host: "localhost",
+      port: None,
+      path: "/",
+      query: None,
+    ),
+  )
+  assert multipart.get_field(parts, "missing") == None
+}
+
+pub fn multipart_uploads_filters_non_file_parts_test() {
+  let body =
+    "--b\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n--b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\nContent-Type: text/plain\r\n\r\nfile contents\r\n--b--"
+  let req =
+    request.Request(
+      method: http.Post,
+      headers: [#("content-type", "multipart/form-data; boundary=b")],
+      body: <<body:utf8>>,
+      scheme: http.Http,
+      host: "localhost",
+      port: None,
+      path: "/",
+      query: None,
+    )
+  let assert Ok(parts) = multipart.parse(req)
+  let uploads = multipart.uploads(parts)
+  assert list.length(uploads) == 1
+}
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+pub fn config_get_returns_none_for_unset_test() {
+  assert config.get("MW_TEST_DEFINITELY_NOT_SET_XYZ123") == None
+}
+
+pub fn config_get_or_returns_default_for_unset_test() {
+  assert config.get_or("MW_TEST_DEFINITELY_NOT_SET_XYZ123", "fallback")
+    == "fallback"
+}
+
+// ---------------------------------------------------------------------------
+// Rescue
+// ---------------------------------------------------------------------------
+
+pub fn rescue_passes_through_normal_response_test() {
+  let c = test_conn.get("/")
+  let resp = rescue.middleware(c, fn(_c) { mw_response.text(200, "ok") })
+  assert resp.status == 200
+}
+
+pub fn rescue_catches_panic_and_returns_500_test() {
+  let c = test_conn.get("/")
+  let resp =
+    rescue.middleware(c, fn(_c) { panic as "something went wrong" })
+  assert resp.status == 500
+}
+
+// ---------------------------------------------------------------------------
+// test_conn helpers
+// ---------------------------------------------------------------------------
+
+pub fn test_conn_get_builds_conn_test() {
+  let c = test_conn.get("/users")
+  assert c.request.method == http.Get
+  assert c.request.path == "/users"
+}
+
+pub fn test_conn_post_builds_conn_test() {
+  let c = test_conn.post("/users")
+  assert c.request.method == http.Post
+}
+
+pub fn test_conn_with_header_test() {
+  let c = test_conn.get("/") |> test_conn.with_header("x-custom", "value")
+  assert request.get_header(c.request, "x-custom") == Ok("value")
+}
+
+pub fn test_conn_with_auth_sets_auth_test() {
+  let c = test_conn.get("/") |> test_conn.with_auth(42, "alice")
+  assert c.auth == Some(conn.AuthUser(id: 42, username: "alice"))
+}
+
+pub fn test_conn_assert_status_passes_test() {
+  let resp = mw_response.html(200, "ok")
+  let _ = test_conn.assert_status(resp, 200)
+}
+
+pub fn test_conn_assert_redirect_passes_test() {
+  let resp = mw_response.redirect(302, to: "/login")
+  let _ = test_conn.assert_redirect(resp, to: "/login")
 }
 
 // ---------------------------------------------------------------------------

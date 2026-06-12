@@ -63,6 +63,12 @@ pub fn send(email: Email, via adapter: Adapter) -> Result(Nil, String) {
   adapter.send_fn(email)
 }
 
+/// Build a custom adapter from any send function. Use this to integrate with
+/// an SMTP client or transactional email API of your choice.
+pub fn adapter(send_fn: fn(Email) -> Result(Nil, String)) -> Adapter {
+  Adapter(send_fn:)
+}
+
 /// An adapter that logs emails to stdout. Useful in development.
 pub fn log_adapter() -> Adapter {
   Adapter(send_fn: fn(email) {
