@@ -9,7 +9,7 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'Reference', link: '/reference/router' },
-      { text: 'GitHub', link: 'https://github.com/bcypert/mistweaver' },
+      { text: 'GitHub', link: 'https://github.com/bradcypert/mistweaver' },
     ],
 
     sidebar: {
@@ -69,7 +69,7 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/bcypert/mistweaver' },
+      { icon: 'github', link: 'https://github.com/bradcypert/mistweaver' },
     ],
 
     footer: {
