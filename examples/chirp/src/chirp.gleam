@@ -5,15 +5,23 @@ import gloo/adapter/sqlite
 import gloo/runner
 import logging
 import mistweaver
+import mistweaver/config
+import mistweaver/pubsub
 import chirp/migrations
 import chirp/router as chirp_router
-
-const session_secret = "chirp-dev-secret-change-in-production"
 
 const port = 4000
 
 pub fn main() {
   logging.configure()
+
+  let session_secret =
+    config.get_or(
+      "APP_SECRET_KEY_BASE",
+      "chirp-dev-secret-change-in-production",
+    )
+
+  pubsub.start()
 
   let assert Ok(repo) = sqlite.start(sqlite.file("chirp.sqlite3"))
 

@@ -54,6 +54,13 @@ pub fn delete(resp: Response(ResponseData)) -> Response(ResponseData) {
   response.Response(..resp, headers: [#("set-cookie", cookie), ..resp.headers])
 }
 
+/// Return the signed cookie value for a session (without cookie formatting).
+/// Useful in tests to inject a session via `test_conn.with_session`.
+pub fn sign(session: Session, secret: String) -> String {
+  let payload = encode_session(session)
+  crypto.sign_message(<<payload:utf8>>, <<secret:utf8>>, crypto.Sha256)
+}
+
 pub fn empty() -> Session {
   dict.new()
 }

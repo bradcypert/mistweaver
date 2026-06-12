@@ -15,6 +15,7 @@ import mistweaver/flash
 import mistweaver/live
 import mistweaver/middleware
 import mistweaver/request as mw_request
+import mistweaver/rescue
 import mistweaver/response as mw_response
 import mistweaver/router
 import chirp/controllers/auth as auth_ctrl
@@ -25,7 +26,7 @@ import chirp/queries
 
 pub fn build(repo: Repo, secret: String) -> router.Router(Connection) {
   router.new()
-  |> router.scope("/", [auth.load(secret)], fn(r) {
+  |> router.scope("/", [rescue.middleware, auth.load(secret)], fn(r) {
     r
     |> router.get("/", fn(c, _) {
       case c.auth {
